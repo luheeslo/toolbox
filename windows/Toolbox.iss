@@ -11,6 +11,7 @@
 #define git "..\bundle\Git.exe"
 #define virtualBoxCommon "..\bundle\common.cab"
 #define virtualBoxMsi "..\bundle\VirtualBox_amd64.msi"
+#define pebblecoin "..\bundle\pebblecoin"
 
 [Setup]
 AppCopyright={#MyAppPublisher}
@@ -61,15 +62,19 @@ Name: "DockerMachine"; Description: "Docker Machine for Windows" ; Types: full c
 Name: "DockerCompose"; Description: "Docker Compose for Windows" ; Types: full custom
 Name: "VirtualBox"; Description: "VirtualBox"; Types: full custom; Flags: disablenouninstallwarning
 Name: "Kitematic"; Description: "Kitematic for Windows (Alpha)" ; Types: full custom
-Name: "Git"; Description: "Git for Windows"; Types: full custom; Flags: disablenouninstallwarning
+Name: "Git"; Description: "Git for Windows"; Types: full custom; Flags: fixed
+Name: "Pebblecoin"; Description: "Pebblecoin"; Types: full custom; Flags: fixed
 
 [Files]
 Source: ".\docker-quickstart-terminal.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#dockerCli}"; DestDir: "{app}"; Flags: ignoreversion; Components: "Docker"
 Source: ".\start.sh"; DestDir: "{app}"; Flags: ignoreversion; Components: "Docker"
+Source: ".\start_walman.sh"; DestDir: "{app}"; Flags: ignoreversion; Components: "Pebblecoin"
+Source: ".\make.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: "Pebblecoin"
 Source: "{#dockerMachineCli}"; DestDir: "{app}"; Flags: ignoreversion; Components: "DockerMachine"
 Source: "{#dockerComposeCli}"; DestDir: "{app}"; Flags: ignoreversion; Components: "DockerCompose"
 Source: "{#kitematic}\*"; DestDir: "{app}\kitematic"; Flags: ignoreversion recursesubdirs; Components: "Kitematic"
+Source: "{#pebblecoin}\*"; DestDir: "{app}\pebblecoin"; Flags: ignoreversion recursesubdirs; Components: "Pebblecoin"
 Source: "{#b2dIsoPath}"; DestDir: "{app}"; Flags: ignoreversion; Components: "DockerMachine"; AfterInstall: CopyBoot2DockerISO()
 Source: "{#git}"; DestDir: "{app}\installers\git"; DestName: "git.exe"; AfterInstall: RunInstallGit();  Components: "Git"
 Source: "{#virtualBoxCommon}"; DestDir: "{app}\installers\virtualbox"; Components: "VirtualBox"
@@ -80,6 +85,10 @@ Name: "{userprograms}\Docker\Kitematic (Alpha)"; WorkingDir: "{app}"; Filename: 
 Name: "{commondesktop}\Kitematic (Alpha)"; WorkingDir: "{app}"; Filename: "{app}\kitematic\Kitematic.exe"; Tasks: desktopicon; Components: "Kitematic"
 Name: "{userprograms}\Docker\Docker Quickstart Terminal"; WorkingDir: "{app}"; Filename: "{pf64}\Git\bin\bash.exe"; Parameters: "--login -i ""{app}\start.sh"""; IconFilename: "{app}/docker-quickstart-terminal.ico"; Components: "Docker"
 Name: "{commondesktop}\Docker Quickstart Terminal"; WorkingDir: "{app}"; Filename: "{pf64}\Git\bin\bash.exe"; Parameters: "--login -i ""{app}\start.sh"""; IconFilename: "{app}/docker-quickstart-terminal.ico"; Tasks: desktopicon; Components: "Docker"
+Name: "{userprograms}\Docker\Start Walman"; WorkingDir: "{app}"; Filename: "{pf64}\Git\bin\bash.exe"; Parameters: " -c ""start_walman.sh init"""; IconFilename: "{app}/docker-quickstart-terminal.ico"; Tasks: desktopicon; Components: "Pebblecoin"
+Name: "{commondesktop}\Start Walman"; WorkingDir: "{app}"; Filename: "{pf64}\Git\bin\bash.exe"; Parameters: " -c ""start_walman.sh init"""; IconFilename: "{app}/docker-quickstart-terminal.ico"; Tasks: desktopicon; Components: "Pebblecoin"
+Name: "{userprograms}\Docker\Stop Walman"; WorkingDir: "{app}"; Filename: "{pf64}\Git\bin\bash.exe"; Parameters: " -c ""start_walman.sh stop"""; IconFilename: "{app}/docker-quickstart-terminal.ico"; Tasks: desktopicon; Components: "Pebblecoin"
+Name: "{commondesktop}\Stop Walman"; WorkingDir: "{app}"; Filename: "{pf64}\Git\bin\bash.exe"; Parameters: " -c ""start_walman.sh stop"""; IconFilename: "{app}/docker-quickstart-terminal.ico"; Tasks: desktopicon; Components: "Pebblecoin"
 
 [UninstallRun]
 Filename: "{app}\docker-machine.exe"; Parameters: "rm -f default"

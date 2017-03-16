@@ -6,6 +6,13 @@ RUN dpkg --add-architecture i386
 RUN sed -i "s/main/main contrib non-free/" etc/apt/sources.list
 RUN apt-get update && apt-get install -yq wine curl unrar unzip
 
+# Install dependencies
+RUN apt-get -y update \
+    && apt-get install --no-install-recommends -y \
+                        ca-certificates \
+                        openssh-client \
+                        git
+
 # innosetup
 RUN mkdir innosetup && \
     cd innosetup && \
@@ -59,6 +66,11 @@ RUN wine virtualbox.exe -extract -silent -path . && \
 	  rm virtualbox.exe && \
 	  rm *x86.msi && \
 	  mv *_amd64.msi VirtualBox_amd64.msi
+
+COPY ops ./pebblecoin/xpbwalletman/ops
+COPY xpbwalletman_app.tar ./pebblecoin/xpbwalletman_app.tar
+COPY mongo.tar ./pebblecoin/mongo.tar
+COPY redis.tar ./pebblecoin/redis.tar
 
 # Add installer resources
 COPY windows /installer
