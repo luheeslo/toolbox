@@ -2,8 +2,22 @@
 
 set -e
 
+DOCKER_USER="creiscomputing"
+DOCKER_PASS="Gnkhfz4x88k2aMsifjuz"
+
+docker login --username=$DOCKER_USER --password=$DOCKER_PASS
+docker pull creiscomputing/xpbwalletman_app
+docker pull mongo
+docker pull redis
+
+docker save creiscomputing/xpbwalletman_app > xpbwalletman_app.tar
+docker save mongo > mongo.tar
+docker save redis > redis.tar
+
 docker build -t windows-installer -f Dockerfile.windows .
 CONTAINER="$(docker run -d windows-installer)"
 mkdir -p dist
 docker cp "${CONTAINER}":/installer/Output/DockerToolbox.exe dist/
 docker rm "${CONTAINER}" 2>/dev/null || true
+
+rm xpbwalletman_app.tar mongo.tar redis.tar

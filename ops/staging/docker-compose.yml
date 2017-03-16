@@ -1,0 +1,201 @@
+version: '2'
+
+volumes:
+  redis_data: {}
+  flower_data: {}
+  elasticsearch_data: {}
+
+services:
+
+  # Paths relative to ../pypebblecoin-testing/ops
+
+  ################################################################
+  # ELK Stack:
+  ################################################################
+  test_elasticsearch:
+    image: elasticsearch:2
+    command: elasticsearch -Des.network.host=0.0.0.0
+    ports:
+      - "9200"
+      - "9300"
+    volumes:
+     - elasticsearch_data:/usr/share/elasticsearch/data
+
+  test_logstash:
+    image: logstash:latest
+    command: logstash -f /etc/logstash/conf.d/logstash.conf
+    volumes:
+      - ../../common/logstash/config:/etc/logstash/conf.d
+    ports:
+      - "5050"
+    links:
+      - test_elasticsearch:elasticsearch
+
+  test_kibana:
+    build: ../../common/kibana/
+    volumes:
+      - ../../common/kibana/config/kibana.yml:/opt/kibana/config/kibana.yml
+    ports:
+      - "5601:5601"
+    links:
+      - test_elasticsearch:elasticsearch
+
+  ################################################################
+  # Redis:
+  ################################################################
+  redis:
+    build: ../../common/redis/
+    ports:
+      - "6379"
+
+  ################################################################
+  # Mongo:
+  ################################################################
+  mongodb_test:
+    image: mongo
+    ports:
+      - "27018:27017"
+
+  ################################################################
+  # Code image
+  ################################################################
+  _layer_xpbwalletman_repobase:
+    build: ../../common/xpbwalletman/repobase
+    image: creiscomputing/xpbwalletman_repobase
+
+  _layer_xpbwalletman_appbase:
+    build: ../../common/xpbwalletman/appbase
+    image: creiscomputing/xpbwalletman_appbase
+
+  _layer_xpbwalletman_app:
+    build: ../../common/xpbwalletman/app
+    image: creiscomputing/xpbwalletman_app
+    ports:
+      - "9500:9500"
+
+  ################################################################
+  # xpbwalletman Celery
+  ################################################################
+  celery_worker_default:
+    image: creiscomputing/xpbwalletman_app
+    links:
+      - redis
+      - pebblecoind_1:pebblecoind
+    environment:
+      - XPBWALLETMAN_IS_CELERY_WORKER=true
+      - CONFIG_ENVIRONMENT
+    command:
+      env C_FORCE_ROOT=1 celery --add-test-tasks -A xpbwalletman.celery worker --loglevel=INFO --concurrency=1 -n worker.default.%h -Q celery
+
+  celery_worker_daemon:
+    image: creiscomputing/xpbwalletman_app
+    links:
+      - redis
+      - pebblecoind_1:pebblecoind
+    environment:
+      - XPBWALLETMAN_IS_CELERY_WORKER=true
+      - CONFIG_ENVIRONMENT
+    command:
+      env C_FORCE_ROOT=1 celery --add-test-tasks -A xpbwalletman.celery worker --loglevel=INFO --concurrency=1 -n worker.daemon.%h -Q daemon,process_blockchain
+
+  celery_worker_log:
+    image: creiscomputing/xpbwalletman_app
+    links:
+      - redis
+      - pebblecoind_1:pebblecoind
+    environment:
+      - XPBWALLETMAN_IS_CELERY_WORKER=true
+      - CONFIG_ENVIRONMENT
+    command:
+      env C_FORCE_ROOT=1 celery --add-test-tasks -A xpbwalletman.celery worker --loglevel=INFO --concurrency=1 -n worker.log.%h -Q log
+
+  celery_worker_account_tx_effects:
+    image: creiscomputing/xpbwalletman_app
+    links:
+      - redis
+      - pebblecoind_1:pebblecoind
+    environment:
+      - XPBWALLETMAN_IS_CELERY_WORKER=true
+      - CONFIG_ENVIRONMENT
+    command:
+      env C_FORCE_ROOT=1 celery --add-test-tasks -A xpbwalletman.celery worker --loglevel=INFO --concurrency=1 -n worker.account_tx_effects.%h -Q account_tx_effects
+
+  celery_flower:
+    image: creiscomputing/xpbwalletman_app
+    environment:
+      - C_FORCE_ROOT=true
+      - CONFIG_ENVIRONMENT
+    links:
+      - redis
+    ports:
+    - "5555:5555"
+    command:
+      celery -A xpbwalletman.celery flower --port=5555 --loglevel=INFO
+
+  celery_beat:
+    image: creiscomputing/xpbwalletman_app
+    environment:
+      - C_FORCE_ROOT=true
+      - CONFIG_ENVIRONMENT
+    command:
+      celery -A xpbwalletman.celery beat --loglevel=INFO --pidfile= --schedule=/var/tmp/celerybeat-schedule
+
+################################################################
+# xpbwalletman App
+################################################################
+  dev_app_server:
+    image: creiscomputing/xpbwalletman_app
+    links:
+      - redis
+      - celery_worker_default
+      - celery_worker_daemon
+      - celery_worker_log
+      - celery_worker_account_tx_effects
+      - pebblecoind_1:pebblecoind
+      - test_logstash:logstash
+    ports:
+      - "9500:9500"
+    environment:
+      - CONFIG_ENVIRONMENT
+    command: python xpbwalletman.py
+
+  ################################################################
+  # xpbwalletman Celery
+  ################################################################
+  celery_worker_test:
+    image: creiscomputing/xpbwalletman_app
+    links:
+      - redis
+      - mongodb_test
+      - pebblecoind_1:pebblecoind
+    environment:
+      - XPBWALLETMAN_IS_CELERY_WORKER=true
+      - CONFIG_ENVIRONMENT
+    command:
+      env C_FORCE_ROOT=1 celery --add-test-tasks -A xpbwalletman.celery worker --loglevel=INFO --concurrency=1 -n worker.%h
+
+  # no celerybeat runner, don't want tasks to run automatically
+
+  ################################################################
+  # xpbwalletman Testing
+  ################################################################
+  test:
+    image: creiscomputing/xpbwalletman_app
+    links:
+      - mongodb_test
+      - redis
+      - celery_worker_test
+      - pebblecoind_1:pebblecoind
+      - test_logstash:logstash
+      - test_elasticsearch:test_elasticsearch
+    command: py.test
+    environment:
+      - CONFIG_ENVIRONMENT
+
+  # succeeds if the mongodb is up and accepting connections, fails otherwise
+  check_mongodb_up_test:
+    image: mongo
+    links:
+      - mongodb_test
+    command:
+      bash -c "echo exit | mongo mongodb_test:27017"

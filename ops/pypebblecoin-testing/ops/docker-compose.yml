@@ -1,0 +1,75 @@
+version: '2'
+
+services:
+
+################################################################
+# Static testnet
+################################################################
+  _layer_pebblecoind_base:
+    build: ./pebblecoind_base/
+    image: pebblecoind_base
+    command: "true"
+
+  _layer_test_pebblecoind_data:
+    build: ./pebblecoind_data/
+    image: test_pebblecoind_data
+    command: "true"
+    links:
+      - _layer_pebblecoind_base
+
+  _layer_test_pebblecoind_conf_node:
+    build: ./pebblecoind_conf_node/
+    image: test_pebblecoind_conf_node
+    command: "true"
+    links:
+      - _layer_test_pebblecoind_data
+
+  ambassador1:
+    image: cpuguy83/docker-grand-ambassador
+    command: "-name test_pebblecoind_1_1"
+
+  ambassador2:
+    image: cpuguy83/docker-grand-ambassador
+    command: "-name test_pebblecoind_2_1"
+
+  pebblecoind_1:
+    image: test_pebblecoind_conf_node
+    links:
+      - _layer_test_pebblecoind_conf_node
+      - ambassador2:pebblecoind_2
+    ports:
+      - "6000"
+      - "7000"
+    stdin_open: true
+    tty: true
+    command: "pebblecoind_2"
+
+  pebblecoind_2:
+    image: test_pebblecoind_conf_node
+    links:
+      - _layer_test_pebblecoind_conf_node
+      - ambassador1:pebblecoind_1
+    ports:
+      - "6000"
+      - "7000"
+    stdin_open: true
+    tty: true
+    command: "pebblecoind_1"
+
+  # succeeds if the testnet is up and accepting connections, fails otherwise
+  _layer_check_pebblecoind_ready:
+    image: check_pebblecoind_ready
+    build: ./check_pebblecoind_ready/
+    command: "true"
+
+  check_pebblecoind1_up:
+    image: check_pebblecoind_ready
+    links:
+      - _layer_check_pebblecoind_ready
+      - pebblecoind_1:pebblecoind
+
+  check_pebblecoind2_up:
+    image: check_pebblecoind_ready
+    links:
+      - _layer_check_pebblecoind_ready
+      - pebblecoind_2:pebblecoind

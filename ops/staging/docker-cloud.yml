@@ -1,0 +1,222 @@
+
+# This stack must serve ELK, Redis, Celery and App.
+# MongoDB and Pebblecoind services will be host outside docker cloud.
+# This file is used for creating a stack on DockerCloud.
+
+
+# stack services
+elasticsearch:
+  image: 'elasticsearch:2'
+  ports:
+    - '9200'
+    - '9300'
+  restart: always
+  tags:
+    - walman-beta
+  volumes:
+    - '/var/lib/elasticsearch_data:/usr/share/elasticsearch/data'
+htmlwallet-server:
+  autoredeploy: true
+  environment:
+    - CONFIG_ENVIRONMENT=staging_walbeta_sp
+  image: 'creiscomputing/xpbhtmlwallet_app:latest'
+  ports:
+    - '80:80'
+  restart: always
+  tags:
+    - walman-beta
+htmlwallet-wallet-only-server:
+  autoredeploy: true
+  environment:
+    - CONFIG_ENVIRONMENT=staging_walbeta_sp
+  image: 'creiscomputing/xpbhtmlwallet_app_wallet_only:latest'
+  ports:
+    - '81:80'
+  restart: always
+  tags:
+    - walman-beta
+kibana:
+  autoredeploy: true
+  command: kibana --plugins plugins/dashboard/index --plugins plugins/discover/index --plugins plugins/doc/index --plugins plugins/kibana/index --plugins plugins/markdown_vis/index --plugins plugins/metric_vis/index --plugins plugins/settings/index --plugins plugins/table_vis/index --plugins plugins/vis_types/index --plugins plugins/visualize/index
+  environment:
+    - ELASTICSEARCH_PRESERVEHOST=true
+    - ELASTICSEARCH_REQUESTTIMEOUT=300000
+    - ELASTICSEARCH_SHARDTIMEOUT=0
+    - ELASTICSEARCH_SSL_VERIFY=true
+    - 'KIBANA_DEFAULTAPPID="dashboard/default"'
+    - KIBANA_INDEX=.kibana
+  image: 'kibana:4'
+  ports:
+    - '5601:5601'
+  restart: always
+  tags:
+    - walman-beta
+logstash:
+  command: |
+    logstash --config.string "
+      input {
+        tcp {
+          port => 5050
+          codec => json
+        }
+      }
+      ## Add your filters here
+      output {
+        elasticsearch {
+          hosts => 'elasticsearch:9200'
+        }
+      }"
+  image: 'logstash:latest'
+  ports:
+    - '5050'
+  restart: always
+  tags:
+    - walman-beta
+redis:
+  image: 'redis:latest'
+  ports:
+    - '6379'
+  restart: always
+  tags:
+    - walman-beta
+tipbot-celery-beat:
+  autoredeploy: true
+  command: celery -A xpbtipbot.celery beat --loglevel=INFO --pidfile= --schedule=/var/tmp/celerybeat-schedule
+  environment:
+    - CONFIG_ENVIRONMENT=staging_tipbot_sp
+    - C_FORCE_ROOT=1
+  image: 'creiscomputing/xpbtipbot_app:latest'
+  restart: always
+  tags:
+    - walman-beta
+tipbot-celery-worker:
+  autoredeploy: true
+  command: 'celery -A xpbtipbot.celery worker --loglevel=INFO --concurrency=1 -n worker.%h'
+  environment:
+    - CONFIG_ENVIRONMENT=staging_tipbot_sp
+    - C_FORCE_ROOT=1
+  image: 'creiscomputing/xpbtipbot_app:latest'
+  restart: always
+  tags:
+    - walman-beta
+tipbot-server:
+  autoredeploy: true
+  command: 'gunicorn xpbtipbot:app --workers=2 --bind 0.0.0.0:9800 --timeout 300 --log-level debug'
+  environment:
+    - CONFIG_ENVIRONMENT=staging_tipbot_sp
+  image: 'creiscomputing/xpbtipbot_app:latest'
+  links:
+    - logstash
+    - redis
+    - tipbot-celery-beat
+    - tipbot-celery-worker
+  ports:
+    - '9800:9800'
+  restart: always
+  tags:
+    - walman-beta
+walman-celery-beat:
+  autoredeploy: true
+  command: celery -A xpbwalletman.celery beat --loglevel=INFO --pidfile= --schedule=/var/tmp/celerybeat-schedule
+  environment:
+    - CONFIG_ENVIRONMENT=staging_walbeta_sp
+    - C_FORCE_ROOT=1
+    - XPBWALLETMAN_IS_CELERY_WORKER=true
+  image: 'creiscomputing/xpbwalletman_app:latest'
+  links:
+    - logstash
+    - redis
+  restart: always
+  tags:
+    - walman-beta
+walman-celery-flower:
+  autoredeploy: true
+  command: celery -A xpbwalletman.celery flower --port=5555 --loglevel=INFO
+  environment:
+    - CONFIG_ENVIRONMENT=staging_walbeta_sp
+    - C_FORCE_ROOT=true
+  image: 'creiscomputing/xpbwalletman_app:latest'
+  links:
+    - logstash
+    - redis
+  ports:
+    - '5555:5555'
+  restart: always
+  tags:
+    - walman-beta
+walman-celery-worker-daemon:
+  autoredeploy: true
+  command: 'celery --add-test-tasks -A xpbwalletman.celery worker --loglevel=INFO --concurrency=1 -n worker.daemon.%h -Q daemon,process_blockchain'
+  environment:
+    - CONFIG_ENVIRONMENT=staging_walbeta_sp
+    - C_FORCE_ROOT=1
+    - XPBWALLETMAN_IS_CELERY_WORKER=true
+  image: 'creiscomputing/xpbwalletman_app:latest'
+  links:
+    - logstash
+    - redis
+  restart: always
+  tags:
+    - walman-beta
+walman-celery-worker-default:
+  autoredeploy: true
+  command: 'celery --add-test-tasks -A xpbwalletman.celery worker --loglevel=INFO --concurrency=1 -n worker.default.%h -Q celery'
+  environment:
+    - CONFIG_ENVIRONMENT=staging_walbeta_sp
+    - C_FORCE_ROOT=1
+    - XPBWALLETMAN_IS_CELERY_WORKER=true
+  image: 'creiscomputing/xpbwalletman_app:latest'
+  links:
+    - logstash
+    - redis
+  restart: always
+  tags:
+    - walman-beta
+walman-celery-worker-log:
+  autoredeploy: true
+  command: 'celery --add-test-tasks -A xpbwalletman.celery worker --loglevel=INFO --concurrency=1 -n worker.log.%h -Q log'
+  environment:
+    - CONFIG_ENVIRONMENT=staging_walbeta_sp
+    - C_FORCE_ROOT=1
+    - XPBWALLETMAN_IS_CELERY_WORKER=true
+  image: 'creiscomputing/xpbwalletman_app:latest'
+  links:
+    - logstash
+    - redis
+  restart: always
+  tags:
+    - walman-beta
+walman-celery-worker-account-tx-effects:
+  autoredeploy: true
+  command: 'celery --add-test-tasks -A xpbwalletman.celery worker --loglevel=INFO --concurrency=1 -n worker.account-tx-effects.%h -Q account_tx_effects'
+  environment:
+    - CONFIG_ENVIRONMENT=staging_walbeta_sp
+    - C_FORCE_ROOT=1
+    - XPBWALLETMAN_IS_CELERY_WORKER=true
+  image: 'creiscomputing/xpbwalletman_app:latest'
+  links:
+    - logstash
+    - redis
+  restart: always
+  tags:
+    - walman-beta
+walman-server:
+  autoredeploy: true
+  command: 'gunicorn xpbwalletman:app --workers 2 --bind 0.0.0.0:9500 --timeout 300 --log-level debug'
+  environment:
+    - CONFIG_ENVIRONMENT=staging_walbeta_sp
+  image: 'creiscomputing/xpbwalletman_app:latest'
+  links:
+    - logstash
+    - redis
+    - walman-celery-beat
+    - walman-celery-flower
+    - walman-celery-worker-daemon
+    - walman-celery-worker-default
+    - walman-celery-worker-log
+    - walman-celery-worker-account-tx-effects
+  ports:
+    - '9500:9500'
+  restart: always
+  tags:
+    - walman-beta
